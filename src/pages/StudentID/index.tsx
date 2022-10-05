@@ -6,7 +6,7 @@ import { styled } from "@mui/material";
 import { useContext, useEffect, useState } from "react";
 import { AppContext } from "../../App";
 import { useNavigate } from "react-router-dom";
-import { Item } from "../../models";
+import { BorrowRecord, Item } from "../../models";
 import { DataStore } from "@aws-amplify/datastore";
 
 const StyledTextField = styled(TextField)`
@@ -16,40 +16,53 @@ const StyledTextField = styled(TextField)`
   }
 `
 
+type UserInfo = {
+	userId: string;
+	username: string;
+}
+
 const validateActions = {
-	'borrow': (item: Item, id: string) => {
+	'borrow': (item: Item, info: UserInfo) => {
 		return '';
 	},
-	'return': (item: Item, id: string) => {
-		return item.record?.studentId !== id && 'Invalid action, the student id does not match with the borrower record.';
+	'return': (item: Item, info: UserInfo) => {
+		return [...item.record].sort((a, b) => (a as BorrowRecord).borrowedAt.localeCompare((b as BorrowRecord).borrowedAt) * -1).at(0)?.userId !== info.userId && 'Invalid action, the user id does not match with the borrower record.';
 	},
 };
 
 const confirmActions = {
-	'borrow': async (item: Item, id: string) => {
+	'borrow': async (item: Item, info: UserInfo) => {
 		return await DataStore.save(Item.copyOf(item, item => {
 				// Update the values on {item} variable to update DataStore entry
-				item.record = {
-					studentId: id,
+				item.record = [...item.record, {
+					...info,
 					borrowedAt: new Date().toISOString(),
-				};
+				}];
 				return item;
 		}));
 	},
-	'return': async (item: Item, id: string) => {
+	'return': async (item: Item, info: UserInfo) => {
 		/* Models in DataStore are immutable. To update a record you must use the copyOf function
 		to apply updates to the item’s fields rather than mutating the instance directly */
 		return await DataStore.save(Item.copyOf(item, item => {
 			// Update the values on {item} variable to update DataStore entry
-			delete item.record;
+			const notReturned = item.record.find(e => e && !e.returnedAt);
+
+			if (!notReturned) {
+				throw new Error();
+			}
+
+			notReturned.returnedAt = new Date().toISOString();
+
 			return item;
 		}));
 	},
 };
 
-const StudentIDPage = () => {
+const UserIdPage = () => {
 
-	const [value, setValue] = useState('');
+	const [userId, setUserId] = useState('');
+	const [username, setUsername] = useState('');
 	const context = useContext(AppContext);
 	const navigate = useNavigate();
 	const [error, setError] = useState('');
@@ -66,24 +79,24 @@ const StudentIDPage = () => {
 			return;
 		}
 
-		if (!value.startsWith('11')) {
-			setError('The student id should have the prefix of "11".');
+		if (userId.length !== 8) {
+			setError('The length of user id should exactly equal 8 digits.');
 			return;
 		}
 
-		if (value.length !== 8) {
-			setError('The length of student id should exactly equal 8 digits.');
+		if (!username.length) {
+			setError('The username is required.');
 			return;
 		}
 
-		const err = validateActions[context.mode](context.item, value);
+		const err = validateActions[context.mode](context.item, { userId, username });
 
 		if (err) {
 			setError(err);
 			return;
 		};
 
-		confirmActions[context.mode](context.item, value)
+		confirmActions[context.mode](context.item, { userId, username })
 			.then(e => {
 				navigate('/success');
 			})
@@ -99,7 +112,7 @@ const StudentIDPage = () => {
 			display: 'flex',
 			flexDirection: 'column',
 		}}>
-			<Header title="Student ID"/>
+			<Header title="User ID"/>
 
 			<div style={{ width: '90%', margin: '0 auto' }}>
 				<Typography variant='h4' fontWeight={700}>Item information</Typography>
@@ -120,9 +133,10 @@ const StudentIDPage = () => {
 
 				<hr style={{ width: 0, marginBottom: '1rem' }} />
 
-				<Typography variant='h6' fontWeight={700} style={{ marginBottom: '.5rem' }}>Enter Student ID to Proceed</Typography>
+				<Typography variant='h6' fontWeight={700} style={{ marginBottom: '.5rem' }}>Enter User ID to Proceed</Typography>
 
-				<StyledTextField variant="filled" label="Student ID" fullWidth value={value} onChange={(e) => setValue(e.currentTarget.value)}  style={{ marginBottom: '.5rem' }} />
+				<StyledTextField variant="filled" label="User ID" fullWidth value={userId} onChange={(e) => setUserId(e.currentTarget.value)}  style={{ marginBottom: '.5rem' }} />
+				{context.mode === 'borrow' ? <StyledTextField variant="filled" label="Username" fullWidth value={username} onChange={(e) => setUsername(e.currentTarget.value)}  style={{ marginBottom: '.5rem' }} /> : <></> }
 
 				<div>
 						{error && 
@@ -148,4 +162,4 @@ const StudentIDPage = () => {
 	);
 }
 
-export default StudentIDPage;
+export default UserIdPage;

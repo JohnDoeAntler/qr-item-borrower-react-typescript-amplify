@@ -33,7 +33,9 @@ const QRCodePage = () => {
 					return;
 				}
 
-				if (context.mode === 'borrow' !== !item.record) {
+				const isBorrowed = item.record.some(e => !e?.returnedAt);
+
+				if (context.mode === 'borrow' !== !isBorrowed) {
 					const opposite = context.mode === 'borrow' ? 'return' : 'borrow';
 					setSnackbar(`This item could not be ${context.mode}ed since it has not been ${opposite}ed yet.`);
 					return;
@@ -48,7 +50,7 @@ const QRCodePage = () => {
 	useEffect(() => {
 		if (data && isValid) {
 			context.setQRCode(data);
-			navigate('/student-id');
+			navigate('/user-id');
 		}
 	}, [data, isValid]);
 
