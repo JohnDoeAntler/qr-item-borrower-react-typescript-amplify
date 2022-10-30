@@ -84,7 +84,7 @@ const UserIdPage = () => {
 			return;
 		}
 
-		if (!username.length) {
+		if (context.mode === 'borrow' && !username.length) {
 			setError('The username is required.');
 			return;
 		}
